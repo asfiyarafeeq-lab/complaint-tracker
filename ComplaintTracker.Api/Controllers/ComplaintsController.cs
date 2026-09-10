@@ -1,4 +1,5 @@
 using ComplaintTracker.Api.Models;
+using ComplaintTracker.Api.Repositories;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ComplaintTracker.Api.Controllers
@@ -7,21 +8,24 @@ namespace ComplaintTracker.Api.Controllers
     [Route("api/[controller]")]
     public class ComplaintsController : ControllerBase
     {
-        // Temporary store until a database is wired up. Static so the data
-        // survives between requests; the controller itself is per-request.
-        private static readonly List<Complaint> Complaints = new();
-        private static int _nextId = 1;
+        private readonly IComplaintRepository _repository;
+
+        public ComplaintsController(IComplaintRepository repository)
+        {
+            _repository = repository;
+        }
 
         [HttpGet]
-        public ActionResult<IEnumerable<Complaint>> GetAll()
+        public async Task<ActionResult<IEnumerable<Complaint>>> GetAll()
         {
-            return Ok(Complaints);
+            var complaints = await _repository.GetAllAsync();
+            return Ok(complaints);
         }
 
         [HttpGet("{id}")]
-        public ActionResult<Complaint> GetById(int id)
+        public async Task<ActionResult<Complaint>> GetById(int id)
         {
-            var complaint = Complaints.FirstOrDefault(c => c.Id == id);
+            var complaint = await _repository.GetByIdAsync(id);
             if (complaint is null)
             {
                 return NotFound();
@@ -31,43 +35,34 @@ namespace ComplaintTracker.Api.Controllers
         }
 
         [HttpPost]
-        public ActionResult<Complaint> Create(Complaint complaint)
+        public async Task<ActionResult<Complaint>> Create(Complaint complaint)
         {
-            complaint.Id = _nextId++;
             complaint.CreatedDate = DateTime.UtcNow;
-            Complaints.Add(complaint);
+            complaint.Id = await _repository.CreateAsync(complaint);
 
             return CreatedAtAction(nameof(GetById), new { id = complaint.Id }, complaint);
         }
 
         [HttpPut("{id}")]
-        public IActionResult Update(int id, Complaint updated)
+        public async Task<IActionResult> Update(int id, Complaint updated)
         {
-            var complaint = Complaints.FirstOrDefault(c => c.Id == id);
-            if (complaint is null)
+            updated.Id = id;
+
+            if (!await _repository.UpdateAsync(updated))
             {
                 return NotFound();
             }
-
-            complaint.Title = updated.Title;
-            complaint.Description = updated.Description;
-            complaint.Category = updated.Category;
-            complaint.Status = updated.Status;
-            complaint.RaisedBy = updated.RaisedBy;
 
             return NoContent();
         }
 
         [HttpDelete("{id}")]
-        public IActionResult Delete(int id)
+        public async Task<IActionResult> Delete(int id)
         {
-            var complaint = Complaints.FirstOrDefault(c => c.Id == id);
-            if (complaint is null)
+            if (!await _repository.DeleteAsync(id))
             {
                 return NotFound();
             }
-
-            Complaints.Remove(complaint);
 
             return NoContent();
         }
