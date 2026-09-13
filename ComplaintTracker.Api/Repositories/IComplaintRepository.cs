@@ -4,7 +4,11 @@ namespace ComplaintTracker.Api.Repositories
 {
     public interface IComplaintRepository
     {
-        Task<IEnumerable<Complaint>> GetAllAsync();
+        /// <summary>
+        /// Returns complaints, optionally narrowed by status and/or category.
+        /// A null or blank filter is ignored, so passing neither returns all rows.
+        /// </summary>
+        Task<IEnumerable<Complaint>> SearchAsync(string? status, string? category);
 
         Task<Complaint?> GetByIdAsync(int id);
 

@@ -13,14 +13,24 @@ namespace ComplaintTracker.Api.Repositories
             _connection = connection;
         }
 
-        public async Task<IEnumerable<Complaint>> GetAllAsync()
+        public async Task<IEnumerable<Complaint>> SearchAsync(string? status, string? category)
         {
+            // Each filter drops out of the WHERE clause when it is null, so one
+            // parameterised statement covers all four combinations.
             const string sql = @"
                 SELECT Id, Title, Description, Category, Status, CreatedDate, RaisedBy
                 FROM dbo.Complaints
+                WHERE (@Status IS NULL OR Status = @Status)
+                  AND (@Category IS NULL OR Category = @Category)
                 ORDER BY Id;";
 
-            return await _connection.QueryAsync<Complaint>(sql);
+            var parameters = new
+            {
+                Status = string.IsNullOrWhiteSpace(status) ? null : status.Trim(),
+                Category = string.IsNullOrWhiteSpace(category) ? null : category.Trim()
+            };
+
+            return await _connection.QueryAsync<Complaint>(sql, parameters);
         }
 
         public async Task<Complaint?> GetByIdAsync(int id)

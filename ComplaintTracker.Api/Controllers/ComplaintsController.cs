@@ -15,10 +15,15 @@ namespace ComplaintTracker.Api.Controllers
             _repository = repository;
         }
 
+        /// <summary>
+        /// Lists complaints. Supply status and/or category to narrow the results.
+        /// </summary>
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Complaint>>> GetAll()
+        public async Task<ActionResult<IEnumerable<Complaint>>> Get(
+            [FromQuery] string? status = null,
+            [FromQuery] string? category = null)
         {
-            var complaints = await _repository.GetAllAsync();
+            var complaints = await _repository.SearchAsync(status, category);
             return Ok(complaints);
         }
 
