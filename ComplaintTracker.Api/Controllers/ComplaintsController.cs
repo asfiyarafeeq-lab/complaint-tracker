@@ -16,14 +16,31 @@ namespace ComplaintTracker.Api.Controllers
         }
 
         /// <summary>
-        /// Lists complaints. Supply status and/or category to narrow the results.
+        /// Lists complaints newest first. Supply status and/or category to narrow
+        /// the results, or sortOrder=asc to list oldest first.
         /// </summary>
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Complaint>>> Get(
             [FromQuery] string? status = null,
-            [FromQuery] string? category = null)
+            [FromQuery] string? category = null,
+            [FromQuery] string? sortOrder = null)
         {
-            var complaints = await _repository.SearchAsync(status, category);
+            bool newestFirst;
+            switch ((sortOrder ?? string.Empty).Trim().ToLowerInvariant())
+            {
+                case "":
+                case "desc":
+                    newestFirst = true;
+                    break;
+                case "asc":
+                    newestFirst = false;
+                    break;
+                default:
+                    ModelState.AddModelError(nameof(sortOrder), "Must be 'asc' or 'desc'.");
+                    return ValidationProblem(ModelState);
+            }
+
+            var complaints = await _repository.SearchAsync(status, category, newestFirst);
             return Ok(complaints);
         }
 

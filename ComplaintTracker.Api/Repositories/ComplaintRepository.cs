@@ -13,16 +13,23 @@ namespace ComplaintTracker.Api.Repositories
             _connection = connection;
         }
 
-        public async Task<IEnumerable<Complaint>> SearchAsync(string? status, string? category)
+        public async Task<IEnumerable<Complaint>> SearchAsync(string? status, string? category, bool newestFirst)
         {
+            // ORDER BY cannot be parameterised, so the direction is chosen from
+            // two fixed strings rather than built from caller input. Id breaks
+            // ties so the order stays stable for rows sharing a CreatedDate.
+            var orderBy = newestFirst
+                ? "CreatedDate DESC, Id DESC"
+                : "CreatedDate ASC, Id ASC";
+
             // Each filter drops out of the WHERE clause when it is null, so one
             // parameterised statement covers all four combinations.
-            const string sql = @"
+            var sql = $@"
                 SELECT Id, Title, Description, Category, Status, CreatedDate, RaisedBy
                 FROM dbo.Complaints
                 WHERE (@Status IS NULL OR Status = @Status)
                   AND (@Category IS NULL OR Category = @Category)
-                ORDER BY Id;";
+                ORDER BY {orderBy};";
 
             var parameters = new
             {

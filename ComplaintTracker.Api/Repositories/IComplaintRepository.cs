@@ -5,10 +5,11 @@ namespace ComplaintTracker.Api.Repositories
     public interface IComplaintRepository
     {
         /// <summary>
-        /// Returns complaints, optionally narrowed by status and/or category.
-        /// A null or blank filter is ignored, so passing neither returns all rows.
+        /// Returns complaints ordered by CreatedDate, optionally narrowed by
+        /// status and/or category. A null or blank filter is ignored, so passing
+        /// neither returns all rows.
         /// </summary>
-        Task<IEnumerable<Complaint>> SearchAsync(string? status, string? category);
+        Task<IEnumerable<Complaint>> SearchAsync(string? status, string? category, bool newestFirst);
 
         Task<Complaint?> GetByIdAsync(int id);
 
