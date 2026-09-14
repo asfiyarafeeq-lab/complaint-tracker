@@ -13,8 +13,28 @@ namespace ComplaintTracker.Api.Repositories
             _connection = connection;
         }
 
+        /// <summary>
+        /// Wraps a keyword as a LIKE pattern, escaping the characters SQL treats
+        /// as wildcards so a title containing "50%" is matched literally.
+        /// </summary>
+        private static string? ToContainsPattern(string? keyword)
+        {
+            if (string.IsNullOrWhiteSpace(keyword))
+            {
+                return null;
+            }
+
+            var escaped = keyword.Trim()
+                .Replace(@"\", @"\\")
+                .Replace("%", @"\%")
+                .Replace("_", @"\_")
+                .Replace("[", @"\[");
+
+            return $"%{escaped}%";
+        }
+
         public async Task<PagedResult<Complaint>> SearchAsync(
-            string? status, string? category, bool newestFirst, int page, int pageSize)
+            string? status, string? category, string? search, bool newestFirst, int page, int pageSize)
         {
             // ORDER BY cannot be parameterised, so the direction is chosen from
             // two fixed strings rather than built from caller input. Id breaks
@@ -30,12 +50,14 @@ namespace ComplaintTracker.Api.Repositories
                 SELECT COUNT(*)
                 FROM dbo.Complaints
                 WHERE (@Status IS NULL OR Status = @Status)
-                  AND (@Category IS NULL OR Category = @Category);
+                  AND (@Category IS NULL OR Category = @Category)
+                  AND (@Search IS NULL OR Title LIKE @Search ESCAPE '\');
 
                 SELECT Id, Title, Description, Category, Status, CreatedDate, RaisedBy
                 FROM dbo.Complaints
                 WHERE (@Status IS NULL OR Status = @Status)
                   AND (@Category IS NULL OR Category = @Category)
+                  AND (@Search IS NULL OR Title LIKE @Search ESCAPE '\')
                 ORDER BY {orderBy}
                 OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;";
 
@@ -43,6 +65,7 @@ namespace ComplaintTracker.Api.Repositories
             {
                 Status = string.IsNullOrWhiteSpace(status) ? null : status.Trim(),
                 Category = string.IsNullOrWhiteSpace(category) ? null : category.Trim(),
+                Search = ToContainsPattern(search),
                 Offset = (page - 1) * pageSize,
                 PageSize = pageSize
             };

@@ -6,12 +6,13 @@ namespace ComplaintTracker.Api.Repositories
     {
         /// <summary>
         /// Returns one page of complaints ordered by CreatedDate, optionally
-        /// narrowed by status and/or category. A null or blank filter is ignored,
-        /// so passing neither considers all rows. TotalCount on the result
-        /// reflects the filters but not the paging.
+        /// narrowed by status, category, and a keyword matched anywhere in the
+        /// title. A null or blank filter is ignored, so passing none considers
+        /// all rows. TotalCount on the result reflects the filters but not the
+        /// paging.
         /// </summary>
         Task<PagedResult<Complaint>> SearchAsync(
-            string? status, string? category, bool newestFirst, int page, int pageSize);
+            string? status, string? category, string? search, bool newestFirst, int page, int pageSize);
 
         Task<Complaint?> GetByIdAsync(int id);
 

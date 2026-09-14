@@ -19,14 +19,16 @@ namespace ComplaintTracker.Api.Controllers
         private const int MaxPageSize = 100;
 
         /// <summary>
-        /// Lists complaints newest first, one page at a time. Supply status and/or
-        /// category to narrow the results, sortOrder=asc to list oldest first, and
+        /// Lists complaints newest first, one page at a time. Supply status,
+        /// category, and/or search (a keyword matched anywhere in the title) to
+        /// narrow the results, sortOrder=asc to list oldest first, and
         /// page/pageSize to move through them.
         /// </summary>
         [HttpGet]
         public async Task<ActionResult<PagedResult<Complaint>>> Get(
             [FromQuery] string? status = null,
             [FromQuery] string? category = null,
+            [FromQuery] string? search = null,
             [FromQuery] string? sortOrder = null,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = DefaultPageSize)
@@ -61,7 +63,7 @@ namespace ComplaintTracker.Api.Controllers
                 return ValidationProblem(ModelState);
             }
 
-            var result = await _repository.SearchAsync(status, category, newestFirst, page, pageSize);
+            var result = await _repository.SearchAsync(status, category, search, newestFirst, page, pageSize);
             return Ok(result);
         }
 
