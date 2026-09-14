@@ -1,4 +1,5 @@
 using System.Data;
+using ComplaintTracker.Api.Middleware;
 using ComplaintTracker.Api.Repositories;
 using Microsoft.Data.SqlClient;
 
@@ -14,6 +15,10 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 builder.Services.AddScoped<IDbConnection>(_ => new SqlConnection(connectionString));
 builder.Services.AddScoped<IComplaintRepository, ComplaintRepository>();
 
+// Turns any unhandled exception into a ProblemDetails response.
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
@@ -22,6 +27,10 @@ builder.Services.AddSwaggerGen();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+
+// First in the pipeline so it also covers failures in the middleware below it.
+app.UseExceptionHandler();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
