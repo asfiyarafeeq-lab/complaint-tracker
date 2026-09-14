@@ -69,3 +69,66 @@ BEGIN
     PRINT 'Constraint CK_Complaints_Status already exists, leaving it as is.';
 END
 GO
+
+/*
+    Indexes for the columns the listing endpoint filters and sorts on. Without
+    them every request reads the whole table. Each is created only when it is
+    missing, so this section is as safe to re-run as the rest of the file.
+
+    Title search uses LIKE '%keyword%', which cannot use an index at all; the
+    index below serves sortBy=title instead.
+*/
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes
+               WHERE name = 'IX_Complaints_Status'
+                 AND object_id = OBJECT_ID('dbo.Complaints'))
+BEGIN
+    PRINT 'Creating index IX_Complaints_Status.';
+    CREATE NONCLUSTERED INDEX IX_Complaints_Status ON dbo.Complaints (Status);
+END
+ELSE
+BEGIN
+    PRINT 'Index IX_Complaints_Status already exists, leaving it as is.';
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes
+               WHERE name = 'IX_Complaints_Category'
+                 AND object_id = OBJECT_ID('dbo.Complaints'))
+BEGIN
+    PRINT 'Creating index IX_Complaints_Category.';
+    CREATE NONCLUSTERED INDEX IX_Complaints_Category ON dbo.Complaints (Category);
+END
+ELSE
+BEGIN
+    PRINT 'Index IX_Complaints_Category already exists, leaving it as is.';
+END
+GO
+
+-- Declared DESC to match the default ordering, though SQL Server can read an
+-- index backwards when the query asks for the opposite direction.
+IF NOT EXISTS (SELECT 1 FROM sys.indexes
+               WHERE name = 'IX_Complaints_CreatedDate'
+                 AND object_id = OBJECT_ID('dbo.Complaints'))
+BEGIN
+    PRINT 'Creating index IX_Complaints_CreatedDate.';
+    CREATE NONCLUSTERED INDEX IX_Complaints_CreatedDate ON dbo.Complaints (CreatedDate DESC);
+END
+ELSE
+BEGIN
+    PRINT 'Index IX_Complaints_CreatedDate already exists, leaving it as is.';
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes
+               WHERE name = 'IX_Complaints_Title'
+                 AND object_id = OBJECT_ID('dbo.Complaints'))
+BEGIN
+    PRINT 'Creating index IX_Complaints_Title.';
+    CREATE NONCLUSTERED INDEX IX_Complaints_Title ON dbo.Complaints (Title);
+END
+ELSE
+BEGIN
+    PRINT 'Index IX_Complaints_Title already exists, leaving it as is.';
+END
+GO
