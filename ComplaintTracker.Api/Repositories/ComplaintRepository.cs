@@ -34,14 +34,27 @@ namespace ComplaintTracker.Api.Repositories
         }
 
         public async Task<PagedResult<Complaint>> SearchAsync(
-            string? status, string? category, string? search, bool newestFirst, int page, int pageSize)
+            string? status,
+            string? category,
+            string? search,
+            ComplaintSortField sortField,
+            SortDirection sortDirection,
+            int page,
+            int pageSize)
         {
-            // ORDER BY cannot be parameterised, so the direction is chosen from
-            // two fixed strings rather than built from caller input. Id breaks
-            // ties so the order stays stable for rows sharing a CreatedDate.
-            var orderBy = newestFirst
-                ? "CreatedDate DESC, Id DESC"
-                : "CreatedDate ASC, Id ASC";
+            // ORDER BY cannot be parameterised, so the clause is chosen from a
+            // fixed set rather than built from caller input. Id breaks ties so
+            // the order stays stable when rows share a value.
+            var descending = sortDirection == SortDirection.Descending;
+            var orderBy = sortField switch
+            {
+                ComplaintSortField.Title => descending
+                    ? "Title DESC, Id DESC"
+                    : "Title ASC, Id ASC",
+                _ => descending
+                    ? "CreatedDate DESC, Id DESC"
+                    : "CreatedDate ASC, Id ASC"
+            };
 
             // Each filter drops out of the WHERE clause when it is null, so one
             // parameterised statement covers all four combinations. The count and

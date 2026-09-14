@@ -21,7 +21,7 @@ namespace ComplaintTracker.Api.Controllers
         /// <summary>
         /// Lists complaints newest first, one page at a time. Supply status,
         /// category, and/or search (a keyword matched anywhere in the title) to
-        /// narrow the results, sortOrder=asc to list oldest first, and
+        /// narrow the results, sortBy/sortOrder to change the ordering, and
         /// page/pageSize to move through them.
         /// </summary>
         [HttpGet]
@@ -29,23 +29,41 @@ namespace ComplaintTracker.Api.Controllers
             [FromQuery] string? status = null,
             [FromQuery] string? category = null,
             [FromQuery] string? search = null,
+            [FromQuery] string? sortBy = null,
             [FromQuery] string? sortOrder = null,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = DefaultPageSize)
         {
-            bool newestFirst;
+            // Both sort inputs are resolved against a fixed set here, so the
+            // repository never sees caller text in its ORDER BY clause.
+            var sortField = ComplaintSortField.CreatedDate;
+            switch ((sortBy ?? string.Empty).Trim().ToLowerInvariant())
+            {
+                case "":
+                case "createddate":
+                    sortField = ComplaintSortField.CreatedDate;
+                    break;
+                case "title":
+                    sortField = ComplaintSortField.Title;
+                    break;
+                default:
+                    ModelState.AddModelError(nameof(sortBy), "Must be 'createdDate' or 'title'.");
+                    break;
+            }
+
+            var sortDirection = SortDirection.Descending;
             switch ((sortOrder ?? string.Empty).Trim().ToLowerInvariant())
             {
                 case "":
                 case "desc":
-                    newestFirst = true;
+                    sortDirection = SortDirection.Descending;
                     break;
                 case "asc":
-                    newestFirst = false;
+                    sortDirection = SortDirection.Ascending;
                     break;
                 default:
                     ModelState.AddModelError(nameof(sortOrder), "Must be 'asc' or 'desc'.");
-                    return ValidationProblem(ModelState);
+                    break;
             }
 
             // An unknown status would otherwise return an empty page, which reads
@@ -72,7 +90,8 @@ namespace ComplaintTracker.Api.Controllers
                 return ValidationProblem(ModelState);
             }
 
-            var result = await _repository.SearchAsync(status, category, search, newestFirst, page, pageSize);
+            var result = await _repository.SearchAsync(
+                status, category, search, sortField, sortDirection, page, pageSize);
             return Ok(result);
         }
 
