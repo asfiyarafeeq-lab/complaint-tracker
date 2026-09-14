@@ -48,6 +48,15 @@ namespace ComplaintTracker.Api.Controllers
                     return ValidationProblem(ModelState);
             }
 
+            // An unknown status would otherwise return an empty page, which reads
+            // the same as "nothing matched" and hides the typo.
+            if (!string.IsNullOrWhiteSpace(status) && !ComplaintStatuses.IsValid(status))
+            {
+                ModelState.AddModelError(
+                    nameof(status),
+                    $"Must be one of: {string.Join(", ", ComplaintStatuses.All)}.");
+            }
+
             if (page < 1)
             {
                 ModelState.AddModelError(nameof(page), "Must be 1 or greater.");

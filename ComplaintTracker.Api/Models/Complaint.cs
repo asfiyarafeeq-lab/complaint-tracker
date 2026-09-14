@@ -21,6 +21,11 @@ namespace ComplaintTracker.Api.Models
 
         [Required]
         [MaxLength(50)]
+        [AllowedValues(
+            ComplaintStatuses.Open,
+            ComplaintStatuses.InProgress,
+            ComplaintStatuses.Resolved,
+            ComplaintStatuses.Closed)]
         public string Status { get; set; } = string.Empty;
 
         // Set by the controller on create; not supplied by the caller.
