@@ -13,7 +13,8 @@ namespace ComplaintTracker.Api.Repositories
             _connection = connection;
         }
 
-        public async Task<IEnumerable<Complaint>> SearchAsync(string? status, string? category, bool newestFirst)
+        public async Task<PagedResult<Complaint>> SearchAsync(
+            string? status, string? category, bool newestFirst, int page, int pageSize)
         {
             // ORDER BY cannot be parameterised, so the direction is chosen from
             // two fixed strings rather than built from caller input. Id breaks
@@ -23,21 +24,41 @@ namespace ComplaintTracker.Api.Repositories
                 : "CreatedDate ASC, Id ASC";
 
             // Each filter drops out of the WHERE clause when it is null, so one
-            // parameterised statement covers all four combinations.
+            // parameterised statement covers all four combinations. The count and
+            // the page share those filters and travel as a single round trip.
             var sql = $@"
+                SELECT COUNT(*)
+                FROM dbo.Complaints
+                WHERE (@Status IS NULL OR Status = @Status)
+                  AND (@Category IS NULL OR Category = @Category);
+
                 SELECT Id, Title, Description, Category, Status, CreatedDate, RaisedBy
                 FROM dbo.Complaints
                 WHERE (@Status IS NULL OR Status = @Status)
                   AND (@Category IS NULL OR Category = @Category)
-                ORDER BY {orderBy};";
+                ORDER BY {orderBy}
+                OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;";
 
             var parameters = new
             {
                 Status = string.IsNullOrWhiteSpace(status) ? null : status.Trim(),
-                Category = string.IsNullOrWhiteSpace(category) ? null : category.Trim()
+                Category = string.IsNullOrWhiteSpace(category) ? null : category.Trim(),
+                Offset = (page - 1) * pageSize,
+                PageSize = pageSize
             };
 
-            return await _connection.QueryAsync<Complaint>(sql, parameters);
+            using var results = await _connection.QueryMultipleAsync(sql, parameters);
+
+            var totalCount = await results.ReadSingleAsync<int>();
+            var items = await results.ReadAsync<Complaint>();
+
+            return new PagedResult<Complaint>
+            {
+                Items = items,
+                Page = page,
+                PageSize = pageSize,
+                TotalCount = totalCount
+            };
         }
 
         public async Task<Complaint?> GetByIdAsync(int id)

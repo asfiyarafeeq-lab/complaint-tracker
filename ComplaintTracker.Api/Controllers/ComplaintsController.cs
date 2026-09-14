@@ -15,15 +15,21 @@ namespace ComplaintTracker.Api.Controllers
             _repository = repository;
         }
 
+        private const int DefaultPageSize = 20;
+        private const int MaxPageSize = 100;
+
         /// <summary>
-        /// Lists complaints newest first. Supply status and/or category to narrow
-        /// the results, or sortOrder=asc to list oldest first.
+        /// Lists complaints newest first, one page at a time. Supply status and/or
+        /// category to narrow the results, sortOrder=asc to list oldest first, and
+        /// page/pageSize to move through them.
         /// </summary>
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Complaint>>> Get(
+        public async Task<ActionResult<PagedResult<Complaint>>> Get(
             [FromQuery] string? status = null,
             [FromQuery] string? category = null,
-            [FromQuery] string? sortOrder = null)
+            [FromQuery] string? sortOrder = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = DefaultPageSize)
         {
             bool newestFirst;
             switch ((sortOrder ?? string.Empty).Trim().ToLowerInvariant())
@@ -40,8 +46,23 @@ namespace ComplaintTracker.Api.Controllers
                     return ValidationProblem(ModelState);
             }
 
-            var complaints = await _repository.SearchAsync(status, category, newestFirst);
-            return Ok(complaints);
+            if (page < 1)
+            {
+                ModelState.AddModelError(nameof(page), "Must be 1 or greater.");
+            }
+
+            if (pageSize < 1 || pageSize > MaxPageSize)
+            {
+                ModelState.AddModelError(nameof(pageSize), $"Must be between 1 and {MaxPageSize}.");
+            }
+
+            if (!ModelState.IsValid)
+            {
+                return ValidationProblem(ModelState);
+            }
+
+            var result = await _repository.SearchAsync(status, category, newestFirst, page, pageSize);
+            return Ok(result);
         }
 
         [HttpGet("{id}")]
