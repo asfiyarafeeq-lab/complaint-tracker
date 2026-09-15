@@ -182,6 +182,5 @@ fixed set rather than built from caller input.
 - Constrain `Category` to a fixed set, as `Status` already is
 - Add authentication so the endpoints are not open to everyone
 - Add integration tests covering the SQL against a real database
-- Index `Status`, `Category`, and `CreatedDate` for faster filtering
 - Move title search to SQL Server full-text search, which can use an index
   where `LIKE '%keyword%'` cannot
