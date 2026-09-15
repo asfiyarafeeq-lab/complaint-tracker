@@ -132,3 +132,49 @@ BEGIN
     PRINT 'Index IX_Complaints_Title already exists, leaving it as is.';
 END
 GO
+
+/*
+    Accounts that may use the system. Passwords are stored only as a hash
+    produced by the API; nothing here can be read back as a password.
+
+    Role is a fixed set, kept in step with UserRoles in the API. New accounts
+    are always created as 'User'; promote one deliberately with:
+
+        UPDATE dbo.Users SET Role = 'Admin' WHERE Username = 'you@example.com';
+*/
+IF OBJECT_ID('dbo.Users', 'U') IS NULL
+BEGIN
+    PRINT 'Creating table dbo.Users.';
+
+    CREATE TABLE dbo.Users
+    (
+        Id           INT            IDENTITY(1,1) NOT NULL,
+        Username     NVARCHAR(100)  NOT NULL,
+        PasswordHash NVARCHAR(500)  NOT NULL,
+        Role         NVARCHAR(20)   NOT NULL,
+        CreatedDate  DATETIME2      NOT NULL,
+
+        CONSTRAINT PK_Users PRIMARY KEY CLUSTERED (Id),
+        CONSTRAINT CK_Users_Role CHECK (Role IN ('User', 'Agent', 'Admin'))
+    );
+END
+ELSE
+BEGIN
+    PRINT 'Table dbo.Users already exists, leaving it as is.';
+END
+GO
+
+-- Usernames must be unique: two accounts with the same name would make login
+-- ambiguous. Unique index rather than a constraint so the lookup is indexed too.
+IF NOT EXISTS (SELECT 1 FROM sys.indexes
+               WHERE name = 'UX_Users_Username'
+                 AND object_id = OBJECT_ID('dbo.Users'))
+BEGIN
+    PRINT 'Creating unique index UX_Users_Username.';
+    CREATE UNIQUE NONCLUSTERED INDEX UX_Users_Username ON dbo.Users (Username);
+END
+ELSE
+BEGIN
+    PRINT 'Index UX_Users_Username already exists, leaving it as is.';
+END
+GO
