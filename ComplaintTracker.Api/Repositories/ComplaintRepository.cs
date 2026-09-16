@@ -6,6 +6,9 @@ namespace ComplaintTracker.Api.Repositories
 {
     public class ComplaintRepository : IComplaintRepository
     {
+        private const string Columns =
+            "Id, Title, Description, Category, Status, CreatedDate, RaisedBy, RaisedByUserId";
+
         private readonly IDbConnection _connection;
 
         public ComplaintRepository(IDbConnection connection)
@@ -37,6 +40,7 @@ namespace ComplaintTracker.Api.Repositories
             string? status,
             string? category,
             string? search,
+            int? raisedByUserId,
             ComplaintSortField sortField,
             SortDirection sortDirection,
             int page,
@@ -57,20 +61,22 @@ namespace ComplaintTracker.Api.Repositories
             };
 
             // Each filter drops out of the WHERE clause when it is null, so one
-            // parameterised statement covers all four combinations. The count and
-            // the page share those filters and travel as a single round trip.
-            var sql = $@"
-                SELECT COUNT(*)
-                FROM dbo.Complaints
-                WHERE (@Status IS NULL OR Status = @Status)
-                  AND (@Category IS NULL OR Category = @Category)
-                  AND (@Search IS NULL OR Title LIKE @Search ESCAPE '\');
-
-                SELECT Id, Title, Description, Category, Status, CreatedDate, RaisedBy
-                FROM dbo.Complaints
+            // parameterised statement covers every combination. The count and the
+            // page share those filters and travel as a single round trip.
+            const string where = @"
                 WHERE (@Status IS NULL OR Status = @Status)
                   AND (@Category IS NULL OR Category = @Category)
                   AND (@Search IS NULL OR Title LIKE @Search ESCAPE '\')
+                  AND (@RaisedByUserId IS NULL OR RaisedByUserId = @RaisedByUserId)";
+
+            var sql = $@"
+                SELECT COUNT(*)
+                FROM dbo.Complaints
+                {where};
+
+                SELECT {Columns}
+                FROM dbo.Complaints
+                {where}
                 ORDER BY {orderBy}
                 OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;";
 
@@ -79,6 +85,7 @@ namespace ComplaintTracker.Api.Repositories
                 Status = string.IsNullOrWhiteSpace(status) ? null : status.Trim(),
                 Category = string.IsNullOrWhiteSpace(category) ? null : category.Trim(),
                 Search = ToContainsPattern(search),
+                RaisedByUserId = raisedByUserId,
                 Offset = (page - 1) * pageSize,
                 PageSize = pageSize
             };
@@ -99,8 +106,8 @@ namespace ComplaintTracker.Api.Repositories
 
         public async Task<Complaint?> GetByIdAsync(int id)
         {
-            const string sql = @"
-                SELECT Id, Title, Description, Category, Status, CreatedDate, RaisedBy
+            var sql = $@"
+                SELECT {Columns}
                 FROM dbo.Complaints
                 WHERE Id = @Id;";
 
@@ -112,8 +119,10 @@ namespace ComplaintTracker.Api.Repositories
             // Id is an IDENTITY column, so it is left out of the insert and
             // read back from the same statement.
             const string sql = @"
-                INSERT INTO dbo.Complaints (Title, Description, Category, Status, CreatedDate, RaisedBy)
-                VALUES (@Title, @Description, @Category, @Status, @CreatedDate, @RaisedBy);
+                INSERT INTO dbo.Complaints
+                    (Title, Description, Category, Status, CreatedDate, RaisedBy, RaisedByUserId)
+                VALUES
+                    (@Title, @Description, @Category, @Status, @CreatedDate, @RaisedBy, @RaisedByUserId);
                 SELECT CAST(SCOPE_IDENTITY() AS int);";
 
             return await _connection.QuerySingleAsync<int>(sql, complaint);
@@ -121,14 +130,13 @@ namespace ComplaintTracker.Api.Repositories
 
         public async Task<bool> UpdateAsync(Complaint complaint)
         {
-            // CreatedDate is deliberately not updated.
+            // CreatedDate and the owner are deliberately not updated.
             const string sql = @"
                 UPDATE dbo.Complaints
                 SET Title = @Title,
                     Description = @Description,
                     Category = @Category,
-                    Status = @Status,
-                    RaisedBy = @RaisedBy
+                    Status = @Status
                 WHERE Id = @Id;";
 
             var rows = await _connection.ExecuteAsync(sql, complaint);

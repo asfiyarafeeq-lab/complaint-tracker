@@ -1,5 +1,7 @@
+using System.Security.Claims;
 using ComplaintTracker.Api.Controllers;
 using ComplaintTracker.Api.Models;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ComplaintTracker.Api.Tests
@@ -9,9 +11,35 @@ namespace ComplaintTracker.Api.Tests
         private readonly FakeComplaintRepository _repository = new();
         private readonly ComplaintsController _controller;
 
+        private const int AdminId = 1;
+        private const int UserId = 2;
+        private const int OtherUserId = 3;
+
+        /// <summary>Puts a signed-in account behind the controller.</summary>
+        private void SignIn(int userId, string username, string role)
+        {
+            var identity = new ClaimsIdentity(
+                new[]
+                {
+                    new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+                    new Claim(ClaimTypes.Name, username),
+                    new Claim(ClaimTypes.Role, role)
+                },
+                authenticationType: "Test");
+
+            _controller.ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) }
+            };
+        }
+
         public ComplaintsControllerTests()
         {
             _controller = new ComplaintsController(_repository);
+
+            // Most tests only exercise the listing rules, so they run as an
+            // Admin, who can see everything. Ownership tests sign in again.
+            SignIn(AdminId, "admin", UserRoles.Admin);
         }
 
         private static Complaint ValidComplaint() => new()
@@ -202,6 +230,8 @@ namespace ComplaintTracker.Api.Tests
         [Fact]
         public async Task Update_TakesTheIdFromTheRouteNotTheBody()
         {
+            _repository.ComplaintToReturn = ValidComplaint();
+
             var complaint = ValidComplaint();
             complaint.Id = 999;
 
@@ -213,6 +243,7 @@ namespace ComplaintTracker.Api.Tests
         [Fact]
         public async Task Update_Returns204_WhenARowChanged()
         {
+            _repository.ComplaintToReturn = ValidComplaint();
             _repository.UpdateSucceeds = true;
 
             var response = await _controller.Update(1, ValidComplaint());
@@ -223,6 +254,7 @@ namespace ComplaintTracker.Api.Tests
         [Fact]
         public async Task Update_Returns404_WhenNoRowChanged()
         {
+            _repository.ComplaintToReturn = ValidComplaint();
             _repository.UpdateSucceeds = false;
 
             var response = await _controller.Update(999, ValidComplaint());
@@ -249,6 +281,111 @@ namespace ComplaintTracker.Api.Tests
             var response = await _controller.Delete(999);
 
             Assert.IsType<NotFoundResult>(response);
+        }
+
+        // ---------- who sees what ----------
+
+        [Fact]
+        public async Task Get_AsUser_IsRestrictedToTheirOwnTickets()
+        {
+            SignIn(UserId, "asfiya", UserRoles.User);
+
+            await _controller.Get();
+
+            Assert.Equal(UserId, _repository.LastRaisedByUserId);
+        }
+
+        [Theory]
+        [InlineData(UserRoles.Agent)]
+        [InlineData(UserRoles.Admin)]
+        public async Task Get_AsStaff_SeesEveryTicket(string role)
+        {
+            SignIn(AdminId, "staff", role);
+
+            await _controller.Get();
+
+            // Null means no owner restriction at all.
+            Assert.Null(_repository.LastRaisedByUserId);
+        }
+
+        [Fact]
+        public async Task GetById_AsUser_ReturnsTheirOwnTicket()
+        {
+            SignIn(UserId, "asfiya", UserRoles.User);
+            var mine = ValidComplaint();
+            mine.RaisedByUserId = UserId;
+            _repository.ComplaintToReturn = mine;
+
+            var response = await _controller.GetById(1);
+
+            Assert.IsType<OkObjectResult>(response.Result);
+        }
+
+        [Fact]
+        public async Task GetById_AsUser_Returns404ForSomeoneElsesTicket()
+        {
+            // 404 rather than 403, so the answer does not confirm it exists.
+            SignIn(UserId, "asfiya", UserRoles.User);
+            var theirs = ValidComplaint();
+            theirs.RaisedByUserId = OtherUserId;
+            _repository.ComplaintToReturn = theirs;
+
+            var response = await _controller.GetById(1);
+
+            Assert.IsType<NotFoundResult>(response.Result);
+        }
+
+        [Fact]
+        public async Task GetById_AsAgent_ReturnsAnyonesTicket()
+        {
+            SignIn(AdminId, "agent", UserRoles.Agent);
+            var theirs = ValidComplaint();
+            theirs.RaisedByUserId = OtherUserId;
+            _repository.ComplaintToReturn = theirs;
+
+            var response = await _controller.GetById(1);
+
+            Assert.IsType<OkObjectResult>(response.Result);
+        }
+
+        [Fact]
+        public async Task Update_AsUser_Returns404ForSomeoneElsesTicket()
+        {
+            SignIn(UserId, "asfiya", UserRoles.User);
+            var theirs = ValidComplaint();
+            theirs.RaisedByUserId = OtherUserId;
+            _repository.ComplaintToReturn = theirs;
+
+            var response = await _controller.Update(1, ValidComplaint());
+
+            Assert.IsType<NotFoundResult>(response);
+        }
+
+        // ---------- ownership on create ----------
+
+        [Fact]
+        public async Task Create_TakesTheOwnerFromTheToken()
+        {
+            SignIn(UserId, "asfiya", UserRoles.User);
+
+            await _controller.Create(ValidComplaint());
+
+            Assert.Equal(UserId, _repository.CreatedComplaint!.RaisedByUserId);
+            Assert.Equal("asfiya", _repository.CreatedComplaint.RaisedBy);
+        }
+
+        [Fact]
+        public async Task Create_IgnoresAnyRaisedByTheCallerSent()
+        {
+            SignIn(UserId, "asfiya", UserRoles.User);
+            var complaint = ValidComplaint();
+            complaint.RaisedBy = "somebody-else";
+            complaint.RaisedByUserId = OtherUserId;
+
+            await _controller.Create(complaint);
+
+            Assert.Equal("asfiya", _repository.CreatedComplaint!.RaisedBy);
+            Assert.Equal(UserId, _repository.CreatedComplaint.RaisedByUserId);
         }
     }
 }

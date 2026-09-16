@@ -1,13 +1,19 @@
+using System.Security.Claims;
 using ComplaintTracker.Api.Models;
 using ComplaintTracker.Api.Repositories;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ComplaintTracker.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class ComplaintsController : ControllerBase
     {
+        private const int DefaultPageSize = 20;
+        private const int MaxPageSize = 100;
+
         private readonly IComplaintRepository _repository;
 
         public ComplaintsController(IComplaintRepository repository)
@@ -15,14 +21,29 @@ namespace ComplaintTracker.Api.Controllers
             _repository = repository;
         }
 
-        private const int DefaultPageSize = 20;
-        private const int MaxPageSize = 100;
+        /// <summary>The id of the account making this request.</summary>
+        private int CurrentUserId =>
+            int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : 0;
+
+        private string CurrentUsername => User.FindFirstValue(ClaimTypes.Name) ?? string.Empty;
 
         /// <summary>
-        /// Lists complaints newest first, one page at a time. Supply status,
-        /// category, and/or search (a keyword matched anywhere in the title) to
-        /// narrow the results, sortBy/sortOrder to change the ordering, and
-        /// page/pageSize to move through them.
+        /// Agents and Admins work across the whole queue; a plain User only ever
+        /// sees their own tickets.
+        /// </summary>
+        private bool CanSeeEveryTicket =>
+            User.IsInRole(UserRoles.Agent) || User.IsInRole(UserRoles.Admin);
+
+        /// <summary>
+        /// The owner to filter by, or null to place no restriction.
+        /// </summary>
+        private int? OwnerRestriction => CanSeeEveryTicket ? null : CurrentUserId;
+
+        /// <summary>
+        /// Lists complaints newest first, one page at a time. Users see their
+        /// own; Agents and Admins see all. Supply status, category, and/or
+        /// search to narrow the results, sortBy/sortOrder to change the
+        /// ordering, and page/pageSize to move through them.
         /// </summary>
         [HttpGet]
         public async Task<ActionResult<PagedResult<Complaint>>> Get(
@@ -91,7 +112,8 @@ namespace ComplaintTracker.Api.Controllers
             }
 
             var result = await _repository.SearchAsync(
-                status, category, search, sortField, sortDirection, page, pageSize);
+                status, category, search, OwnerRestriction, sortField, sortDirection, page, pageSize);
+
             return Ok(result);
         }
 
@@ -104,6 +126,13 @@ namespace ComplaintTracker.Api.Controllers
                 return NotFound();
             }
 
+            // Someone else's ticket is reported as missing rather than
+            // forbidden, so the response does not confirm that it exists.
+            if (!CanSeeEveryTicket && complaint.RaisedByUserId != CurrentUserId)
+            {
+                return NotFound();
+            }
+
             return Ok(complaint);
         }
 
@@ -111,6 +140,12 @@ namespace ComplaintTracker.Api.Controllers
         public async Task<ActionResult<Complaint>> Create(Complaint complaint)
         {
             complaint.CreatedDate = DateTime.UtcNow;
+
+            // Ownership comes from the token: a caller cannot raise a ticket in
+            // somebody else's name by putting it in the body.
+            complaint.RaisedBy = CurrentUsername;
+            complaint.RaisedByUserId = CurrentUserId;
+
             complaint.Id = await _repository.CreateAsync(complaint);
 
             return CreatedAtAction(nameof(GetById), new { id = complaint.Id }, complaint);
@@ -119,6 +154,17 @@ namespace ComplaintTracker.Api.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(int id, Complaint updated)
         {
+            var existing = await _repository.GetByIdAsync(id);
+            if (existing is null)
+            {
+                return NotFound();
+            }
+
+            if (!CanSeeEveryTicket && existing.RaisedByUserId != CurrentUserId)
+            {
+                return NotFound();
+            }
+
             updated.Id = id;
 
             if (!await _repository.UpdateAsync(updated))
@@ -129,7 +175,12 @@ namespace ComplaintTracker.Api.Controllers
             return NoContent();
         }
 
+        /// <summary>
+        /// Removing a ticket destroys the record of it, so this is kept to
+        /// Admins. Everyone else closes tickets instead.
+        /// </summary>
         [HttpDelete("{id}")]
+        [Authorize(Roles = UserRoles.Admin)]
         public async Task<IActionResult> Delete(int id)
         {
             if (!await _repository.DeleteAsync(id))

@@ -31,8 +31,16 @@ namespace ComplaintTracker.Api.Models
         // Set by the controller on create; not supplied by the caller.
         public DateTime CreatedDate { get; set; }
 
-        [Required]
-        [MaxLength(100)]
+        /// <summary>
+        /// Display name of whoever raised this. Taken from the caller's token,
+        /// so anything sent in the request body is ignored.
+        /// </summary>
         public string RaisedBy { get; set; } = string.Empty;
+
+        /// <summary>
+        /// The account that raised this, used to decide who may see it. Null on
+        /// rows created before accounts existed.
+        /// </summary>
+        public int? RaisedByUserId { get; set; }
     }
 }

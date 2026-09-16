@@ -9,12 +9,14 @@ namespace ComplaintTracker.Api.Repositories
         /// direction, optionally narrowed by status, category, and a keyword
         /// matched anywhere in the title. A null or blank filter is ignored, so
         /// passing none considers all rows. TotalCount on the result reflects
-        /// the filters but not the paging.
+        /// the filters but not the paging. raisedByUserId restricts the results
+        /// to one account, which is how a User is shown only their own.
         /// </summary>
         Task<PagedResult<Complaint>> SearchAsync(
             string? status,
             string? category,
             string? search,
+            int? raisedByUserId,
             ComplaintSortField sortField,
             SortDirection sortDirection,
             int page,

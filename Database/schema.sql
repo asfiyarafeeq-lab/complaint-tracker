@@ -178,3 +178,50 @@ BEGIN
     PRINT 'Index UX_Users_Username already exists, leaving it as is.';
 END
 GO
+
+/*
+    Links a complaint to the account that raised it, so a User can be shown
+    only their own. Nullable because rows created before accounts existed have
+    no owner; those stay visible to Agents and Admins only.
+*/
+IF NOT EXISTS (SELECT 1 FROM sys.columns
+               WHERE name = 'RaisedByUserId'
+                 AND object_id = OBJECT_ID('dbo.Complaints'))
+BEGIN
+    PRINT 'Adding column dbo.Complaints.RaisedByUserId.';
+
+    ALTER TABLE dbo.Complaints ADD RaisedByUserId INT NULL;
+END
+ELSE
+BEGIN
+    PRINT 'Column RaisedByUserId already exists, leaving it as is.';
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys
+               WHERE name = 'FK_Complaints_RaisedByUser')
+BEGIN
+    PRINT 'Adding foreign key FK_Complaints_RaisedByUser.';
+
+    ALTER TABLE dbo.Complaints
+        ADD CONSTRAINT FK_Complaints_RaisedByUser
+            FOREIGN KEY (RaisedByUserId) REFERENCES dbo.Users (Id);
+END
+ELSE
+BEGIN
+    PRINT 'Foreign key FK_Complaints_RaisedByUser already exists, leaving it as is.';
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes
+               WHERE name = 'IX_Complaints_RaisedByUserId'
+                 AND object_id = OBJECT_ID('dbo.Complaints'))
+BEGIN
+    PRINT 'Creating index IX_Complaints_RaisedByUserId.';
+    CREATE NONCLUSTERED INDEX IX_Complaints_RaisedByUserId ON dbo.Complaints (RaisedByUserId);
+END
+ELSE
+BEGIN
+    PRINT 'Index IX_Complaints_RaisedByUserId already exists, leaving it as is.';
+END
+GO

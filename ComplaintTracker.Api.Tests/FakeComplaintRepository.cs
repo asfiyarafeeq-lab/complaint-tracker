@@ -14,6 +14,7 @@ namespace ComplaintTracker.Api.Tests
         public string? LastStatus { get; private set; }
         public string? LastCategory { get; private set; }
         public string? LastSearch { get; private set; }
+        public int? LastRaisedByUserId { get; private set; }
         public ComplaintSortField LastSortField { get; private set; }
         public SortDirection LastSortDirection { get; private set; }
         public int LastPage { get; private set; }
@@ -35,6 +36,7 @@ namespace ComplaintTracker.Api.Tests
             string? status,
             string? category,
             string? search,
+            int? raisedByUserId,
             ComplaintSortField sortField,
             SortDirection sortDirection,
             int page,
@@ -44,6 +46,7 @@ namespace ComplaintTracker.Api.Tests
             LastStatus = status;
             LastCategory = category;
             LastSearch = search;
+            LastRaisedByUserId = raisedByUserId;
             LastSortField = sortField;
             LastSortDirection = sortDirection;
             LastPage = page;
