@@ -17,6 +17,7 @@ namespace ComplaintTracker.Api.Repositories
             string? category,
             string? search,
             int? raisedByUserId,
+            int? assignedToUserId,
             ComplaintSortField sortField,
             SortDirection sortDirection,
             int page,
@@ -27,6 +28,12 @@ namespace ComplaintTracker.Api.Repositories
         Task<int> CreateAsync(Complaint complaint);
 
         Task<bool> UpdateAsync(Complaint complaint);
+
+        /// <summary>
+        /// Points a ticket at a staff member, or clears it when both values are
+        /// null. Returns false when no such ticket exists.
+        /// </summary>
+        Task<bool> AssignAsync(int complaintId, int? assignedToUserId, string? assignedTo);
 
         Task<bool> DeleteAsync(int id);
     }

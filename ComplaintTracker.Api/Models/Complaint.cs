@@ -42,5 +42,14 @@ namespace ComplaintTracker.Api.Models
         /// rows created before accounts existed.
         /// </summary>
         public int? RaisedByUserId { get; set; }
+
+        /// <summary>
+        /// Display name of the staff member working this, or null if nobody has
+        /// picked it up. Set by the assign endpoint, not by the request body.
+        /// </summary>
+        public string? AssignedTo { get; set; }
+
+        /// <summary>The account working this, or null while unassigned.</summary>
+        public int? AssignedToUserId { get; set; }
     }
 }

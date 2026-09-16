@@ -15,6 +15,7 @@ namespace ComplaintTracker.Api.Tests
         public string? LastCategory { get; private set; }
         public string? LastSearch { get; private set; }
         public int? LastRaisedByUserId { get; private set; }
+        public int? LastAssignedToUserId { get; private set; }
         public ComplaintSortField LastSortField { get; private set; }
         public SortDirection LastSortDirection { get; private set; }
         public int LastPage { get; private set; }
@@ -37,6 +38,7 @@ namespace ComplaintTracker.Api.Tests
             string? category,
             string? search,
             int? raisedByUserId,
+            int? assignedToUserId,
             ComplaintSortField sortField,
             SortDirection sortDirection,
             int page,
@@ -47,6 +49,7 @@ namespace ComplaintTracker.Api.Tests
             LastCategory = category;
             LastSearch = search;
             LastRaisedByUserId = raisedByUserId;
+            LastAssignedToUserId = assignedToUserId;
             LastSortField = sortField;
             LastSortDirection = sortDirection;
             LastPage = page;
@@ -73,6 +76,19 @@ namespace ComplaintTracker.Api.Tests
         {
             UpdatedComplaint = complaint;
             return Task.FromResult(UpdateSucceeds);
+        }
+
+        public int? AssignedUserId { get; private set; }
+        public string? AssignedUsername { get; private set; }
+        public bool AssignWasCalled { get; private set; }
+        public bool AssignSucceeds { get; set; } = true;
+
+        public Task<bool> AssignAsync(int complaintId, int? assignedToUserId, string? assignedTo)
+        {
+            AssignWasCalled = true;
+            AssignedUserId = assignedToUserId;
+            AssignedUsername = assignedTo;
+            return Task.FromResult(AssignSucceeds);
         }
 
         public Task<bool> DeleteAsync(int id)

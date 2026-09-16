@@ -7,7 +7,8 @@ namespace ComplaintTracker.Api.Repositories
     public class ComplaintRepository : IComplaintRepository
     {
         private const string Columns =
-            "Id, Title, Description, Category, Status, CreatedDate, RaisedBy, RaisedByUserId";
+            "Id, Title, Description, Category, Status, CreatedDate, RaisedBy, RaisedByUserId, " +
+            "AssignedTo, AssignedToUserId";
 
         private readonly IDbConnection _connection;
 
@@ -41,6 +42,7 @@ namespace ComplaintTracker.Api.Repositories
             string? category,
             string? search,
             int? raisedByUserId,
+            int? assignedToUserId,
             ComplaintSortField sortField,
             SortDirection sortDirection,
             int page,
@@ -67,7 +69,8 @@ namespace ComplaintTracker.Api.Repositories
                 WHERE (@Status IS NULL OR Status = @Status)
                   AND (@Category IS NULL OR Category = @Category)
                   AND (@Search IS NULL OR Title LIKE @Search ESCAPE '\')
-                  AND (@RaisedByUserId IS NULL OR RaisedByUserId = @RaisedByUserId)";
+                  AND (@RaisedByUserId IS NULL OR RaisedByUserId = @RaisedByUserId)
+                  AND (@AssignedToUserId IS NULL OR AssignedToUserId = @AssignedToUserId)";
 
             var sql = $@"
                 SELECT COUNT(*)
@@ -86,6 +89,7 @@ namespace ComplaintTracker.Api.Repositories
                 Category = string.IsNullOrWhiteSpace(category) ? null : category.Trim(),
                 Search = ToContainsPattern(search),
                 RaisedByUserId = raisedByUserId,
+                AssignedToUserId = assignedToUserId,
                 Offset = (page - 1) * pageSize,
                 PageSize = pageSize
             };
@@ -140,6 +144,21 @@ namespace ComplaintTracker.Api.Repositories
                 WHERE Id = @Id;";
 
             var rows = await _connection.ExecuteAsync(sql, complaint);
+            return rows > 0;
+        }
+
+        public async Task<bool> AssignAsync(int complaintId, int? assignedToUserId, string? assignedTo)
+        {
+            const string sql = @"
+                UPDATE dbo.Complaints
+                SET AssignedToUserId = @AssignedToUserId,
+                    AssignedTo = @AssignedTo
+                WHERE Id = @Id;";
+
+            var rows = await _connection.ExecuteAsync(
+                sql,
+                new { Id = complaintId, AssignedToUserId = assignedToUserId, AssignedTo = assignedTo });
+
             return rows > 0;
         }
 

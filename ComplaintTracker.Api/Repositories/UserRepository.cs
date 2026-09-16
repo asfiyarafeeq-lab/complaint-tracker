@@ -23,6 +23,16 @@ namespace ComplaintTracker.Api.Repositories
             return await _connection.QuerySingleOrDefaultAsync<User>(sql, new { Username = username });
         }
 
+        public async Task<User?> GetByIdAsync(int id)
+        {
+            const string sql = @"
+                SELECT Id, Username, PasswordHash, Role, CreatedDate
+                FROM dbo.Users
+                WHERE Id = @Id;";
+
+            return await _connection.QuerySingleOrDefaultAsync<User>(sql, new { Id = id });
+        }
+
         public async Task<bool> UsernameExistsAsync(string username)
         {
             const string sql = "SELECT COUNT(1) FROM dbo.Users WHERE Username = @Username;";

@@ -9,6 +9,7 @@ namespace ComplaintTracker.Api.Tests
     public class ComplaintsControllerTests
     {
         private readonly FakeComplaintRepository _repository = new();
+        private readonly FakeUserRepository _users = new();
         private readonly ComplaintsController _controller;
 
         private const int AdminId = 1;
@@ -35,7 +36,7 @@ namespace ComplaintTracker.Api.Tests
 
         public ComplaintsControllerTests()
         {
-            _controller = new ComplaintsController(_repository);
+            _controller = new ComplaintsController(_repository, _users);
 
             // Most tests only exercise the listing rules, so they run as an
             // Admin, who can see everything. Ownership tests sign in again.
@@ -386,6 +387,102 @@ namespace ComplaintTracker.Api.Tests
 
             Assert.Equal("asfiya", _repository.CreatedComplaint!.RaisedBy);
             Assert.Equal(UserId, _repository.CreatedComplaint.RaisedByUserId);
+        }
+
+        // ---------- assignment ----------
+
+        [Fact]
+        public async Task Assign_PointsTheTicketAtAnAgent()
+        {
+            _repository.ComplaintToReturn = ValidComplaint();
+            _users.Add(5, "nawaz", UserRoles.Agent);
+
+            var response = await _controller.Assign(1, new AssignRequest { AssignedToUserId = 5 });
+
+            Assert.IsType<NoContentResult>(response);
+            Assert.Equal(5, _repository.AssignedUserId);
+            Assert.Equal("nawaz", _repository.AssignedUsername);
+        }
+
+        [Fact]
+        public async Task Assign_AcceptsAnAdminAsTheAssignee()
+        {
+            _repository.ComplaintToReturn = ValidComplaint();
+            _users.Add(5, "boss", UserRoles.Admin);
+
+            var response = await _controller.Assign(1, new AssignRequest { AssignedToUserId = 5 });
+
+            Assert.IsType<NoContentResult>(response);
+        }
+
+        [Fact]
+        public async Task Assign_RejectsAPlainUserAsTheAssignee()
+        {
+            // Assigning to someone who cannot work tickets strands the work.
+            _repository.ComplaintToReturn = ValidComplaint();
+            _users.Add(5, "someone", UserRoles.User);
+
+            var response = await _controller.Assign(1, new AssignRequest { AssignedToUserId = 5 });
+
+            Assert.IsType<ObjectResult>(response);
+            Assert.False(_repository.AssignWasCalled);
+        }
+
+        [Fact]
+        public async Task Assign_RejectsAnAccountThatDoesNotExist()
+        {
+            _repository.ComplaintToReturn = ValidComplaint();
+
+            var response = await _controller.Assign(1, new AssignRequest { AssignedToUserId = 999 });
+
+            Assert.IsType<ObjectResult>(response);
+            Assert.False(_repository.AssignWasCalled);
+        }
+
+        [Fact]
+        public async Task Assign_Returns404ForATicketThatDoesNotExist()
+        {
+            _repository.ComplaintToReturn = null;
+
+            var response = await _controller.Assign(999, new AssignRequest { AssignedToUserId = 5 });
+
+            Assert.IsType<NotFoundResult>(response);
+            Assert.False(_repository.AssignWasCalled);
+        }
+
+        [Fact]
+        public async Task Assign_WithNullClearsTheAssignment()
+        {
+            _repository.ComplaintToReturn = ValidComplaint();
+
+            var response = await _controller.Assign(1, new AssignRequest { AssignedToUserId = null });
+
+            Assert.IsType<NoContentResult>(response);
+            Assert.True(_repository.AssignWasCalled);
+            Assert.Null(_repository.AssignedUserId);
+            Assert.Null(_repository.AssignedUsername);
+        }
+
+        // ---------- the assigned-to-me filter ----------
+
+        [Fact]
+        public async Task Get_WithAssignedToMe_FiltersToTheCaller()
+        {
+            SignIn(7, "nawaz", UserRoles.Agent);
+
+            await _controller.Get(assignedToMe: true);
+
+            Assert.Equal(7, _repository.LastAssignedToUserId);
+        }
+
+        [Fact]
+        public async Task Get_WithoutAssignedToMe_PlacesNoAssignmentFilter()
+        {
+            SignIn(7, "nawaz", UserRoles.Agent);
+
+            await _controller.Get();
+
+            Assert.Null(_repository.LastAssignedToUserId);
         }
     }
 }

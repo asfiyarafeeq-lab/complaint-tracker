@@ -15,10 +15,12 @@ namespace ComplaintTracker.Api.Controllers
         private const int MaxPageSize = 100;
 
         private readonly IComplaintRepository _repository;
+        private readonly IUserRepository _users;
 
-        public ComplaintsController(IComplaintRepository repository)
+        public ComplaintsController(IComplaintRepository repository, IUserRepository users)
         {
             _repository = repository;
+            _users = users;
         }
 
         /// <summary>The id of the account making this request.</summary>
@@ -50,6 +52,7 @@ namespace ComplaintTracker.Api.Controllers
             [FromQuery] string? status = null,
             [FromQuery] string? category = null,
             [FromQuery] string? search = null,
+            [FromQuery] bool assignedToMe = false,
             [FromQuery] string? sortBy = null,
             [FromQuery] string? sortOrder = null,
             [FromQuery] int page = 1,
@@ -111,8 +114,13 @@ namespace ComplaintTracker.Api.Controllers
                 return ValidationProblem(ModelState);
             }
 
+            // assignedToMe narrows the queue to the caller; it is what an Agent
+            // uses to see their own work rather than the whole board.
+            var assignedTo = assignedToMe ? CurrentUserId : (int?)null;
+
             var result = await _repository.SearchAsync(
-                status, category, search, OwnerRestriction, sortField, sortDirection, page, pageSize);
+                status, category, search, OwnerRestriction, assignedTo,
+                sortField, sortDirection, page, pageSize);
 
             return Ok(result);
         }
@@ -171,6 +179,50 @@ namespace ComplaintTracker.Api.Controllers
             {
                 return NotFound();
             }
+
+            return NoContent();
+        }
+
+        /// <summary>
+        /// Points a ticket at a staff member, or clears the assignment when
+        /// assignedToUserId is null. Admin only, since deciding who works what
+        /// is the Admin's job.
+        /// </summary>
+        [HttpPut("{id}/assign")]
+        [Authorize(Roles = UserRoles.Admin)]
+        public async Task<IActionResult> Assign(int id, AssignRequest request)
+        {
+            var complaint = await _repository.GetByIdAsync(id);
+            if (complaint is null)
+            {
+                return NotFound();
+            }
+
+            if (request.AssignedToUserId is null)
+            {
+                await _repository.AssignAsync(id, null, null);
+                return NoContent();
+            }
+
+            var assignee = await _users.GetByIdAsync(request.AssignedToUserId.Value);
+            if (assignee is null)
+            {
+                ModelState.AddModelError(
+                    nameof(request.AssignedToUserId), "No account with that id.");
+                return ValidationProblem(ModelState);
+            }
+
+            // Assigning to someone who cannot work tickets would leave the work
+            // stranded, so only staff accounts are accepted.
+            if (assignee.Role == UserRoles.User)
+            {
+                ModelState.AddModelError(
+                    nameof(request.AssignedToUserId),
+                    "Tickets can only be assigned to an Agent or an Admin.");
+                return ValidationProblem(ModelState);
+            }
+
+            await _repository.AssignAsync(id, assignee.Id, assignee.Username);
 
             return NoContent();
         }

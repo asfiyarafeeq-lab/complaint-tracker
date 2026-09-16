@@ -225,3 +225,58 @@ BEGIN
     PRINT 'Index IX_Complaints_RaisedByUserId already exists, leaving it as is.';
 END
 GO
+
+/*
+    Who is working the ticket. Null means nobody has picked it up yet, which is
+    how unassigned work is found. AssignedTo holds the name for display, the
+    same way RaisedBy does.
+*/
+IF NOT EXISTS (SELECT 1 FROM sys.columns
+               WHERE name = 'AssignedToUserId'
+                 AND object_id = OBJECT_ID('dbo.Complaints'))
+BEGIN
+    PRINT 'Adding columns AssignedToUserId and AssignedTo.';
+
+    ALTER TABLE dbo.Complaints ADD AssignedToUserId INT NULL;
+END
+ELSE
+BEGIN
+    PRINT 'Column AssignedToUserId already exists, leaving it as is.';
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.columns
+               WHERE name = 'AssignedTo'
+                 AND object_id = OBJECT_ID('dbo.Complaints'))
+BEGIN
+    ALTER TABLE dbo.Complaints ADD AssignedTo NVARCHAR(100) NULL;
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys
+               WHERE name = 'FK_Complaints_AssignedToUser')
+BEGIN
+    PRINT 'Adding foreign key FK_Complaints_AssignedToUser.';
+
+    ALTER TABLE dbo.Complaints
+        ADD CONSTRAINT FK_Complaints_AssignedToUser
+            FOREIGN KEY (AssignedToUserId) REFERENCES dbo.Users (Id);
+END
+ELSE
+BEGIN
+    PRINT 'Foreign key FK_Complaints_AssignedToUser already exists, leaving it as is.';
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes
+               WHERE name = 'IX_Complaints_AssignedToUserId'
+                 AND object_id = OBJECT_ID('dbo.Complaints'))
+BEGIN
+    PRINT 'Creating index IX_Complaints_AssignedToUserId.';
+    CREATE NONCLUSTERED INDEX IX_Complaints_AssignedToUserId ON dbo.Complaints (AssignedToUserId);
+END
+ELSE
+BEGIN
+    PRINT 'Index IX_Complaints_AssignedToUserId already exists, leaving it as is.';
+END
+GO
