@@ -99,6 +99,13 @@ namespace ComplaintTracker.Api.Controllers
                     $"Must be one of: {string.Join(", ", ComplaintStatuses.All)}.");
             }
 
+            if (!string.IsNullOrWhiteSpace(category) && !ComplaintCategories.IsValid(category))
+            {
+                ModelState.AddModelError(
+                    nameof(category),
+                    $"Must be one of: {string.Join(", ", ComplaintCategories.All)}.");
+            }
+
             if (page < 1)
             {
                 ModelState.AddModelError(nameof(page), "Must be 1 or greater.");

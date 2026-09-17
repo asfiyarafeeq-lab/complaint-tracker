@@ -17,6 +17,14 @@ namespace ComplaintTracker.Api.Models
 
         [Required]
         [MaxLength(100)]
+        [AllowedValues(
+            ComplaintCategories.Hardware,
+            ComplaintCategories.Software,
+            ComplaintCategories.Network,
+            ComplaintCategories.AccountAccess,
+            ComplaintCategories.Email,
+            ComplaintCategories.Printer,
+            ComplaintCategories.Other)]
         public string Category { get; set; } = string.Empty;
 
         [Required]

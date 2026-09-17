@@ -280,3 +280,29 @@ BEGIN
     PRINT 'Index IX_Complaints_AssignedToUserId already exists, leaving it as is.';
 END
 GO
+
+/*
+    Category is a fixed set, the same way Status is. Adding this fails if any
+    existing row holds a value outside the list, which is deliberate: it forces
+    the data to be sorted out rather than silently allowing exceptions.
+*/
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.check_constraints
+    WHERE name = 'CK_Complaints_Category'
+      AND parent_object_id = OBJECT_ID('dbo.Complaints')
+)
+BEGIN
+    PRINT 'Adding constraint CK_Complaints_Category.';
+
+    ALTER TABLE dbo.Complaints
+        ADD CONSTRAINT CK_Complaints_Category
+            CHECK (Category IN
+                ('Hardware', 'Software', 'Network', 'Account Access',
+                 'Email', 'Printer', 'Other'));
+END
+ELSE
+BEGIN
+    PRINT 'Constraint CK_Complaints_Category already exists, leaving it as is.';
+END
+GO

@@ -47,7 +47,7 @@ namespace ComplaintTracker.Api.Tests
         {
             Title = "Lift not working",
             Description = "Stuck on the second floor.",
-            Category = "Infrastructure",
+            Category = ComplaintCategories.Hardware,
             Status = ComplaintStatuses.Open,
             RaisedBy = "asfiya"
         };
@@ -68,10 +68,10 @@ namespace ComplaintTracker.Api.Tests
         [Fact]
         public async Task Get_PassesFiltersThroughUntouched()
         {
-            await _controller.Get(status: "Open", category: "Plumbing", search: "leak");
+            await _controller.Get(status: "Open", category: "Network", search: "leak");
 
             Assert.Equal("Open", _repository.LastStatus);
-            Assert.Equal("Plumbing", _repository.LastCategory);
+            Assert.Equal("Network", _repository.LastCategory);
             Assert.Equal("leak", _repository.LastSearch);
         }
 
@@ -483,6 +483,29 @@ namespace ComplaintTracker.Api.Tests
             await _controller.Get();
 
             Assert.Null(_repository.LastAssignedToUserId);
+        }
+
+        // ---------- category filter ----------
+
+        [Theory]
+        [InlineData("hardware")]
+        [InlineData("Plumbing")]
+        [InlineData("nonsense")]
+        public async Task Get_RejectsInvalidCategoryFilter(string category)
+        {
+            var response = await _controller.Get(category: category);
+
+            Assert.IsType<ObjectResult>(response.Result);
+            Assert.False(_repository.SearchWasCalled);
+        }
+
+        [Fact]
+        public async Task Get_AcceptsAValidCategoryFilter()
+        {
+            var response = await _controller.Get(category: ComplaintCategories.Network);
+
+            Assert.IsType<OkObjectResult>(response.Result);
+            Assert.Equal("Network", _repository.LastCategory);
         }
     }
 }

@@ -1,12 +1,13 @@
 # Complaint Tracker
 
-A small ASP.NET Core Web API for logging and tracking complaints, backed by
+An IT helpdesk ticketing API in ASP.NET Core, backed by
 SQL Server through Dapper.
 
 ## What it does
 
-Complaints are created, read, updated, and deleted over a REST API. The
-listing endpoint filters by status and category, searches titles by keyword,
+Staff and users sign in with a token. Users raise tickets and see their own;
+Agents work the queue; Admins assign tickets and can delete them. The listing
+endpoint filters by status, category and assignee, searches titles by keyword,
 sorts by date or title, and returns results a page at a time.
 
 ## Built with
@@ -14,6 +15,7 @@ sorts by date or title, and returns results a page at a time.
 - .NET 8 (ASP.NET Core Web API)
 - Dapper 2.1.79 over Microsoft.Data.SqlClient 7.0.2
 - SQL Server
+- JWT bearer tokens for authentication
 - Swagger / Swashbuckle for the browsable API
 - xUnit for the tests
 
@@ -50,7 +52,19 @@ machine using Windows authentication:
 Change `Server` if yours is elsewhere — a named instance would be
 `Server=localhost\SQLEXPRESS`, for example.
 
-### 3. Run it
+### 3. Set a signing key
+
+Tokens are signed with a secret that is deliberately not in this repository.
+Set your own, from the `ComplaintTracker.Api` folder:
+
+```
+dotnet user-secrets set "Jwt:Key" "any long random string, at least 32 characters"
+```
+
+It is stored outside the project, so it is never committed. The app refuses to
+start without it and tells you this command.
+
+### 4. Run it
 
 ```
 cd ComplaintTracker.Api
@@ -60,14 +74,52 @@ dotnet run
 Then open <http://localhost:5053/swagger>. From Visual Studio, F5 does the
 same and opens the browser for you.
 
-### 4. Run the tests
+### 5. Run the tests
 
 ```
 dotnet test
 ```
 
-56 tests, no database required. Stop the running app first — otherwise the
+94 tests, no database required. Stop the running app first — otherwise the
 build cannot overwrite the files it has open.
+
+## Accounts and roles
+
+Every complaint endpoint needs a token. Register, log in, then send the token
+as `Authorization: Bearer <token>` — or paste it into Swagger's **Authorize**
+button, which does that for you.
+
+| Method | Route | Does |
+|---|---|---|
+| POST | `/api/auth/register` | Creates an account, always as a `User` |
+| POST | `/api/auth/login` | Returns a token valid for 60 minutes |
+
+Three roles decide what an account may do:
+
+| | User | Agent | Admin |
+|---|---|---|---|
+| Raise a ticket | yes | yes | yes |
+| See tickets | own only | all | all |
+| Update a ticket | own only | any | any |
+| Assign a ticket | no | no | yes |
+| Delete a ticket | no | no | yes |
+
+Agents see the whole queue rather than only their own work, so unassigned
+tickets can be picked up; `?assignedToMe=true` narrows it to their own.
+
+Registration always creates a `User`. Letting the caller pick a role would let
+anyone sign up as an admin, so promote deliberately in the database:
+
+```sql
+UPDATE dbo.Users SET Role = 'Admin' WHERE Username = 'you@example.com';
+```
+
+The role is carried inside the token, so log in again afterwards — an existing
+token keeps the old role until it expires.
+
+Passwords are stored only as a salted hash. Login answers a wrong password and
+a username that does not exist identically, so the response cannot be used to
+discover which accounts exist.
 
 ## The API
 
@@ -79,6 +131,7 @@ Base path: `/api/complaints`
 | GET | `/api/complaints/{id}` | One complaint, or 404 |
 | POST | `/api/complaints` | Create one, returns 201 |
 | PUT | `/api/complaints/{id}` | Replace one, returns 204 or 404 |
+| PUT | `/api/complaints/{id}/assign` | Assign to staff, or unassign with null. Admin only |
 | DELETE | `/api/complaints/{id}` | Remove one, returns 204 or 404 |
 
 ### Listing options
@@ -88,18 +141,18 @@ All optional, and all combinable.
 | Parameter | Default | Notes |
 |---|---|---|
 | `status` | none | Must be one of the four statuses, or 400 |
-| `category` | none | Exact match, case-insensitive |
+| `assignedToMe` | `false` | Narrows to tickets assigned to the caller |
+| `category` | none | Must be one of the seven categories, or 400 |
 | `search` | none | Matched anywhere in the title |
 | `sortBy` | `createdDate` | `createdDate` or `title`, else 400 |
 | `sortOrder` | `desc` | `asc` or `desc`, else 400 |
 | `page` | `1` | 1 or greater, else 400 |
 | `pageSize` | `20` | 1 to 100, else 400 |
 
-For example, the open plumbing complaints mentioning "leak", oldest first,
-three to a page:
+For example, the open network tickets mentioning "vpn", oldest first, three to a page:
 
 ```
-GET /api/complaints?status=Open&category=Plumbing&search=leak&sortOrder=asc&page=1&pageSize=3
+GET /api/complaints?status=Open&category=Network&search=vpn&sortOrder=asc&page=1&pageSize=3
 ```
 
 ### A complaint
@@ -107,12 +160,15 @@ GET /api/complaints?status=Open&category=Plumbing&search=leak&sortOrder=asc&page
 ```json
 {
   "id": 1,
-  "title": "Water leakage in Block B",
-  "description": "Continuous leakage from the overhead tank since Monday.",
-  "category": "Plumbing",
+  "title": "VPN keeps dropping",
+  "description": "Disconnects every few minutes when working from home.",
+  "category": "Network",
   "status": "Open",
   "createdDate": "2026-09-10T09:40:28.42Z",
-  "raisedBy": "ravi"
+  "raisedBy": "ravi",
+  "raisedByUserId": 4,
+  "assignedTo": "nawaz",
+  "assignedToUserId": 2
 }
 ```
 
@@ -120,9 +176,12 @@ GET /api/complaints?status=Open&category=Plumbing&search=leak&sortOrder=asc&page
 anything you send for them is ignored.
 
 `status` must be exactly `Open`, `In Progress`, `Resolved`, or `Closed` —
-the spelling and capitalisation matter. `title`, `category`, `status`, and
-`raisedBy` are required, and are capped at 200, 100, 50, and 100 characters
-to match the columns.
+the spelling and capitalisation matter.
+`category` must be exactly one of `Hardware`, `Software`, `Network`,
+`Account Access`, `Email`, `Printer`, or `Other`. `title`, `description`,
+`category` and `status` are required. `raisedBy`, `raisedByUserId`,
+`assignedTo` and `assignedToUserId` are all set by the server: the owner comes
+from your token, and the assignee only from the assign endpoint.
 
 ### A page of complaints
 
@@ -162,14 +221,15 @@ or unexpected faults:
 
 ```
 ComplaintTracker.Api/
-  Controllers/     ComplaintsController — HTTP only, no SQL
-  Models/          Complaint, PagedResult, the status and sort values
-  Repositories/    IComplaintRepository and its Dapper implementation
+  Controllers/     ComplaintsController and AuthController — HTTP only, no SQL
+  Models/          Complaint, User, PagedResult, and the fixed value lists
+  Repositories/    The interfaces and their Dapper implementations
+  Services/        TokenService, which signs the login tokens
   Middleware/      Turns unhandled exceptions into ProblemDetails
 ComplaintTracker.Api.Tests/
-                   xUnit tests, using a fake repository so no database is needed
+                   xUnit tests, using fake repositories so no database is needed
 Database/
-  schema.sql       Creates the database and table; safe to re-run
+  schema.sql       Creates the database, tables and indexes; safe to re-run
 ```
 
 Controllers deal with HTTP, repositories deal with SQL, and neither knows
@@ -179,8 +239,8 @@ fixed set rather than built from caller input.
 
 ## Future enhancements
 
-- Constrain `Category` to a fixed set, as `Status` already is
-- Add authentication so the endpoints are not open to everyone
 - Add integration tests covering the SQL against a real database
+- Let an Admin promote accounts through the API instead of a SQL UPDATE
+- Add refresh tokens, so a session outlives the 60 minute expiry
 - Move title search to SQL Server full-text search, which can use an index
   where `LIKE '%keyword%'` cannot
