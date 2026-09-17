@@ -80,7 +80,7 @@ same and opens the browser for you.
 dotnet test
 ```
 
-94 tests, no database required. Stop the running app first — otherwise the
+98 tests, no database required. Stop the running app first — otherwise the
 build cannot overwrite the files it has open.
 
 ## Accounts and roles
@@ -145,7 +145,7 @@ All optional, and all combinable.
 | `category` | none | Must be one of the seven categories, or 400 |
 | `search` | none | Matched anywhere in the title |
 | `sortBy` | `createdDate` | `createdDate` or `title`, else 400 |
-| `sortOrder` | `desc` | `asc` or `desc`, else 400 |
+| `sortOrder` | depends | `asc` or `desc`, else 400. Defaults to newest first by date, A to Z by title |
 | `page` | `1` | 1 or greater, else 400 |
 | `pageSize` | `20` | 1 to 100, else 400 |
 

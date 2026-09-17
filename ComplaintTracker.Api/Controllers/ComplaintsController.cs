@@ -79,6 +79,12 @@ namespace ComplaintTracker.Api.Controllers
             switch ((sortOrder ?? string.Empty).Trim().ToLowerInvariant())
             {
                 case "":
+                    // Newest first is the natural default for a date, but for a
+                    // title people expect A to Z.
+                    sortDirection = sortField == ComplaintSortField.Title
+                        ? SortDirection.Ascending
+                        : SortDirection.Descending;
+                    break;
                 case "desc":
                     sortDirection = SortDirection.Descending;
                     break;

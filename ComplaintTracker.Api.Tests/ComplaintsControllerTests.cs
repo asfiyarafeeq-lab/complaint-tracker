@@ -507,5 +507,34 @@ namespace ComplaintTracker.Api.Tests
             Assert.IsType<OkObjectResult>(response.Result);
             Assert.Equal("Network", _repository.LastCategory);
         }
+
+        // ---------- the default direction depends on the column ----------
+
+        [Fact]
+        public async Task Get_SortingByTitle_DefaultsToAToZ()
+        {
+            await _controller.Get(sortBy: "title");
+
+            Assert.Equal(ComplaintSortField.Title, _repository.LastSortField);
+            Assert.Equal(SortDirection.Ascending, _repository.LastSortDirection);
+        }
+
+        [Fact]
+        public async Task Get_SortingByDate_DefaultsToNewestFirst()
+        {
+            await _controller.Get(sortBy: "createdDate");
+
+            Assert.Equal(SortDirection.Descending, _repository.LastSortDirection);
+        }
+
+        [Theory]
+        [InlineData("asc", SortDirection.Ascending)]
+        [InlineData("desc", SortDirection.Descending)]
+        public async Task Get_AnExplicitSortOrderWinsOverTheDefault(string sortOrder, SortDirection expected)
+        {
+            await _controller.Get(sortBy: "title", sortOrder: sortOrder);
+
+            Assert.Equal(expected, _repository.LastSortDirection);
+        }
     }
 }
